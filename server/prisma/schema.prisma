@@ -1,0 +1,67 @@
+// Prisma schema — SQLite for local dev. Swap `provider`/`DATABASE_URL` for Postgres in production
+// without changing application code (see docs/03-architecture.md).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  displayName   String
+  createdAt     DateTime @default(now())
+
+  ownedRooms    Room[]       @relation("RoomOwner")
+  memberships   Membership[]
+}
+
+// SQLite has no native enum support in Prisma, so roles are validated app-side (see
+// server/src/rooms/types.ts RoomRole = "OWNER" | "EDITOR" | "VIEWER") and stored as String here.
+// Swapping to Postgres in production can reintroduce a real enum without changing app code.
+
+model Room {
+  id             String   @id @default(cuid())
+  joinCode       String   @unique
+  name           String
+  ownerId        String
+  owner          User     @relation("RoomOwner", fields: [ownerId], references: [id])
+  defaultRole    String   @default("EDITOR")
+  isLocked       Boolean  @default(false)
+  isEnded        Boolean  @default(false)
+  stateSnapshot  String   @default("[]") // JSON-encoded array of canvas elements
+  createdAt      DateTime @default(now())
+
+  memberships    Membership[]
+  auditLogs      AuditLogEntry[]
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id])
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  guestName String?
+  role      String
+  joinedAt  DateTime @default(now())
+
+  @@index([roomId])
+}
+
+model AuditLogEntry {
+  id        String   @id @default(cuid())
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id])
+  actorId   String
+  action    String
+  detail    String   @default("{}") // JSON-encoded
+  createdAt DateTime @default(now())
+
+  @@index([roomId])
+}
