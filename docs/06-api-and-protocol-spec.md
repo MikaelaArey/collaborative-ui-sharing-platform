@@ -71,3 +71,39 @@ or, on failure: `{ "type": "error", "reason": "ROOM_NOT_FOUND" | "ROOM_ENDED" | 
 
 Every rejected client request results in an `error` message back to that client only — state is
 never silently dropped without feedback.
+
+## 3. Remote screen control extensions
+
+Added for the Host-screen-sharing feature — see
+[08-remote-screen-control.md](08-remote-screen-control.md). These messages ride the same room
+WebSocket connection described above.
+
+### Client → Server
+
+| type              | payload                                   | who                          |
+|-------------------|---------------------------------------------|-------------------------------|
+| `rtc:offer`       | `{ toId, sdp }`                             | Host (to each Viewer)         |
+| `rtc:answer`      | `{ toId, sdp }`                             | Viewer (to the Host)          |
+| `rtc:ice`         | `{ toId, candidate }`                       | anyone, to their peer         |
+| `owner:grantControl` | `{ userId }`                             | Host only                     |
+| `owner:revokeControl` | `{}`                                    | Host only                     |
+| `control:request` | `{}` — asks the Host for control            | any non-Host participant      |
+| `input:mouseMove` | `{ x, y }` (0–1 normalized fractions)        | current Controller only       |
+| `input:mouseButton` | `{ button, action: "down" \| "up", x, y }` | current Controller only       |
+| `input:scroll`    | `{ deltaX, deltaY }`                         | current Controller only       |
+| `input:key`       | `{ key, code, action: "down" \| "up", modifiers }` | current Controller only |
+
+### Server → Client
+
+| type              | payload                                             |
+|-------------------|-------------------------------------------------------|
+| `rtc:offer` / `rtc:answer` / `rtc:ice` | relayed as-is to the addressed participant       |
+| `control:granted` | `{ userId }` — broadcast to the room                  |
+| `control:revoked` | `{}` — broadcast to the room                           |
+| `control:requested` | `{ userId }` — sent to the Host only                 |
+| `input:event`     | the original `input:*` payload, relayed to the Host's connection only |
+| `error`           | `{ reason: "NOT_CONTROLLER" }` when a non-Controller sends an `input:*` message |
+
+Server-side enforcement: every `input:*` message is checked against the room's current
+`controllerId` before being relayed — see
+[09-security-and-permissions-v2.md](09-security-and-permissions-v2.md) §1.

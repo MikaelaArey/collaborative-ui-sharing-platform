@@ -13,6 +13,8 @@ interface RoomFlags {
   ownerId: string;
   isLocked: boolean;
   isEnded: boolean;
+  /** The single participant currently allowed to send input:* messages, or null. Host-granted only. */
+  controllerId: string | null;
 }
 
 interface ConnectionState {
@@ -123,6 +125,7 @@ async function handleConnection(ws: WebSocket, joinCode: string) {
     const conns = roomConnections.get(conn.roomId);
     const wasPresent = conns?.delete(conn.id) ?? false;
     if (!wasPresent) return; // already removed (and broadcast) by an owner:kick/owner:end action
+    clearControllerIfSelf(conn.roomId, conn.participant.id);
     broadcast(conn.roomId, { type: "participant:left", userId: conn.participant.id }, conn.id);
     void recordAudit(conn.roomId, conn.participant.id, "LEAVE");
   });
@@ -163,6 +166,7 @@ async function handleJoin(ws: WebSocket, joinCode: string, msg: any): Promise<Co
       ownerId: room.ownerId,
       isLocked: room.isLocked,
       isEnded: room.isEnded,
+      controllerId: null,
     });
   }
   const flags = roomFlags.get(room.id)!;
@@ -198,7 +202,7 @@ async function handleJoin(ws: WebSocket, joinCode: string, msg: any): Promise<Co
   send(connState, {
     type: "joined",
     you: { id: participant.id, role: effectiveRoleFor(flags, participant) },
-    room: { id: room.id, name: room.name, isLocked: flags.isLocked },
+    room: { id: room.id, name: room.name, isLocked: flags.isLocked, controllerId: flags.controllerId },
     elements,
     participants: participantsList(room.id),
   });
@@ -282,6 +286,70 @@ async function handleMessage(conn: ConnectionState, msg: any) {
       return;
     }
 
+    // --- WebRTC signaling relay: server never inspects SDP/ICE content, only routes it. ---
+    case "rtc:offer":
+    case "rtc:answer":
+    case "rtc:ice": {
+      const targetId = String(msg.toId ?? "");
+      const target = findParticipantConnection(conn.roomId, targetId);
+      if (!target) {
+        send(conn, { type: "error", reason: "PEER_NOT_FOUND" });
+        return;
+      }
+      const { toId, ...rest } = msg;
+      send(target, { ...rest, type: msg.type, fromId: conn.participant.id });
+      return;
+    }
+
+    case "control:request": {
+      const host = findParticipantConnection(conn.roomId, flags.ownerId);
+      if (host) send(host, { type: "control:requested", userId: conn.participant.id });
+      return;
+    }
+
+    case "owner:grantControl": {
+      if (conn.participant.id !== flags.ownerId) {
+        send(conn, { type: "error", reason: "FORBIDDEN" });
+        return;
+      }
+      const targetId = String(msg.userId ?? "");
+      if (targetId === flags.ownerId || !findParticipantConnection(conn.roomId, targetId)) {
+        send(conn, { type: "error", reason: "INVALID_CONTROL_GRANT" });
+        return;
+      }
+      flags.controllerId = targetId;
+      broadcast(conn.roomId, { type: "control:granted", userId: targetId });
+      await recordAudit(conn.roomId, conn.participant.id, "GRANT_CONTROL", { targetId });
+      return;
+    }
+
+    case "owner:revokeControl": {
+      if (conn.participant.id !== flags.ownerId) {
+        send(conn, { type: "error", reason: "FORBIDDEN" });
+        return;
+      }
+      flags.controllerId = null;
+      broadcast(conn.roomId, { type: "control:revoked" });
+      await recordAudit(conn.roomId, conn.participant.id, "REVOKE_CONTROL");
+      return;
+    }
+
+    case "input:mouseMove":
+    case "input:mouseButton":
+    case "input:scroll":
+    case "input:key": {
+      if (!canSendInput(conn, flags)) {
+        send(conn, { type: "error", reason: "NOT_CONTROLLER" });
+        return;
+      }
+      const host = findParticipantConnection(conn.roomId, flags.ownerId);
+      if (host) {
+        const { type, ...payload } = msg;
+        send(host, { type: "input:event", inputType: type, ...payload });
+      }
+      return;
+    }
+
     case "owner:setRole": {
       if (conn.participant.id !== flags.ownerId) {
         send(conn, { type: "error", reason: "FORBIDDEN" });
@@ -313,6 +381,7 @@ async function handleMessage(conn: ConnectionState, msg: any) {
         send(target, { type: "kicked" });
         roomConnections.get(conn.roomId)?.delete(target.id);
         target.ws.close();
+        clearControllerIfSelf(conn.roomId, targetId);
         broadcast(conn.roomId, { type: "participant:left", userId: targetId });
         await recordAudit(conn.roomId, conn.participant.id, "KICK", { targetId });
       }
@@ -364,4 +433,16 @@ function findParticipantConnection(roomId: string, participantId: string): Conne
     if (c.participant.id === participantId) return c;
   }
   return undefined;
+}
+
+function clearControllerIfSelf(roomId: string, participantId: string) {
+  const flags = roomFlags.get(roomId);
+  if (flags?.controllerId === participantId) {
+    flags.controllerId = null;
+    broadcast(roomId, { type: "control:revoked" });
+  }
+}
+
+function canSendInput(conn: ConnectionState, flags: RoomFlags): boolean {
+  return !flags.isLocked && flags.controllerId === conn.participant.id;
 }

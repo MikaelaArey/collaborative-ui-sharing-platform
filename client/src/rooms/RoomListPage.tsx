@@ -20,9 +20,9 @@ export function RoomListPage() {
       .catch((err) => setError(err.message));
   }, [token]);
 
-  async function handleCreate(name: string, defaultRole: "EDITOR" | "VIEWER") {
+  async function handleCreate(name: string) {
     if (!token) return;
-    const { room } = await api.createRoom(token, name, defaultRole);
+    const { room } = await api.createRoom(token, name);
     setShowCreate(false);
     navigate(`/room/${room.joinCode}`);
   }

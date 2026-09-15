@@ -300,3 +300,126 @@ button:disabled {
   background: #f5f6fa;
   border-radius: 4px;
 }
+
+.owner-panel-participants li button {
+  align-self: flex-start;
+}
+
+.control-requests {
+  margin-bottom: 16px;
+  padding: 8px;
+  background: #fff4e5;
+  border-radius: 4px;
+}
+
+.control-requests ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.control-requests li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-hint {
+  font-size: 13px;
+  color: #666;
+  margin: 0;
+}
+
+.host-web-notice {
+  margin: 12px 16px 0;
+  padding: 10px 14px;
+  background: #fff4e5;
+  border: 1px solid #f58231;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.permission-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.screen-share-view {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111;
+  overflow: hidden;
+  outline: none;
+}
+
+.screen-share-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: default;
+}
+
+.screen-share-view.controllable .screen-share-video {
+  cursor: crosshair;
+}
+
+.screen-share-waiting {
+  color: #ccc;
+  font-size: 16px;
+}
+
+.screen-share-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.screen-share-badge-active {
+  background: #3cb44b;
+}
+
+.request-control-btn {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.source-picker {
+  width: 480px;
+}
+
+.source-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.source-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: #f5f6fa;
+  padding: 8px;
+  color: #1a1a1a;
+}
+
+.source-option img {
+  width: 100%;
+  border-radius: 4px;
+}

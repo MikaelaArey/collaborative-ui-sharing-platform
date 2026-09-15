@@ -2,14 +2,16 @@
   "name": "collaborative-ui-sharing-platform",
   "private": true,
   "version": "0.1.0",
-  "description": "A platform for real-time multi-user collaborative editing of a single shared live interface.",
+  "description": "A platform for real-time screen sharing and remote control: a Host shares their live screen, and an invited participant can be granted control of it.",
   "workspaces": [
     "server",
-    "client"
+    "client",
+    "desktop"
   ],
   "scripts": {
     "dev:server": "npm run dev --workspace=server",
-    "dev:client": "npm run dev --workspace=client"
+    "dev:client": "npm run dev --workspace=client",
+    "dev:desktop": "npm run start --workspace=desktop"
   },
   "license": "UNLICENSED",
   "author": "Mikaela Arey",
@@ -19,6 +21,7 @@
     "@prisma/engines@5.22.0": true,
     "esbuild@0.28.2": true,
     "esbuild@0.21.5": true,
-    "fsevents@2.3.3": true
+    "fsevents@2.3.3": true,
+    "electron@33.4.11": true
   }
 }
