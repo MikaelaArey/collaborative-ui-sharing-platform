@@ -3,6 +3,12 @@ import { WS_URL } from "../api/client.js";
 import type { Participant, RoomRole } from "./types.js";
 
 type Status = "connecting" | "joined" | "kicked" | "ended" | "error";
+export type ControlMode = "host_approval" | "quick_swap";
+
+export interface PresenceCursor {
+  x: number;
+  y: number;
+}
 
 interface State {
   status: Status;
@@ -12,8 +18,13 @@ interface State {
   you: { id: string; role: RoomRole } | null;
   participants: Participant[];
   controllerId: string | null;
+  controlMode: ControlMode;
   pendingControlRequests: string[];
   remoteStream: MediaStream | null;
+  /** The Host's own captured stream, so the Host's RoomPage can show a self-preview with the same
+   *  cursor overlay everyone else sees — the Host never receives their own stream back over WebRTC. */
+  localStream: MediaStream | null;
+  cursors: Map<string, PresenceCursor>;
 }
 
 const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
@@ -40,8 +51,11 @@ export function useScreenShareRoom(
     you: null,
     participants: [],
     controllerId: null,
+    controlMode: "host_approval",
     pendingControlRequests: [],
     remoteStream: null,
+    localStream: null,
+    cursors: new Map(),
   });
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -109,6 +123,7 @@ export function useScreenShareRoom(
             roomName: msg.room.name,
             isLocked: msg.room.isLocked,
             controllerId: msg.room.controllerId,
+            controlMode: msg.room.controlMode ?? "host_approval",
             you: msg.you,
             participants: msg.participants,
           }));
@@ -129,9 +144,21 @@ export function useScreenShareRoom(
         }
         case "participant:left": {
           participantsRef.current = participantsRef.current.filter((p) => p.id !== msg.userId);
-          setState((prev) => ({ ...prev, participants: participantsRef.current }));
+          setState((prev) => {
+            const cursors = new Map(prev.cursors);
+            cursors.delete(msg.userId);
+            return { ...prev, participants: participantsRef.current, cursors };
+          });
           peersRef.current.get(msg.userId)?.close();
           peersRef.current.delete(msg.userId);
+          return;
+        }
+        case "cursor:moved": {
+          setState((prev) => {
+            const cursors = new Map(prev.cursors);
+            cursors.set(msg.userId, { x: msg.x, y: msg.y });
+            return { ...prev, cursors };
+          });
           return;
         }
         case "role:changed": {
@@ -157,6 +184,9 @@ export function useScreenShareRoom(
           return;
         case "control:revoked":
           setState((prev) => ({ ...prev, controllerId: null }));
+          return;
+        case "control:modeChanged":
+          setState((prev) => ({ ...prev, controlMode: msg.mode }));
           return;
         case "control:requested":
           setState((prev) => ({
@@ -208,6 +238,7 @@ export function useScreenShareRoom(
   const startSharing = useCallback(
     (stream: MediaStream) => {
       localStreamRef.current = stream;
+      setState((prev) => ({ ...prev, localStream: stream }));
       for (const p of participantsRef.current) {
         if (p.id !== youRef.current?.id) createPeerForViewer(p.id);
       }
@@ -218,6 +249,7 @@ export function useScreenShareRoom(
   const stopSharing = useCallback(() => {
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
+    setState((prev) => ({ ...prev, localStream: null }));
     for (const pc of peersRef.current.values()) pc.close();
     peersRef.current.clear();
   }, []);
@@ -228,8 +260,11 @@ export function useScreenShareRoom(
       startSharing,
       stopSharing,
       requestControl: () => send({ type: "control:request" }),
+      claimControl: () => send({ type: "control:claim" }),
       grantControl: (userId: string) => send({ type: "owner:grantControl", userId }),
       revokeControl: () => send({ type: "owner:revokeControl" }),
+      setControlMode: (mode: ControlMode) => send({ type: "owner:setControlMode", mode }),
+      sendCursor: (x: number, y: number) => send({ type: "cursor", x, y }),
       lock: (locked: boolean) => send({ type: "owner:lock", locked }),
       kick: (userId: string) => send({ type: "owner:kick", userId }),
       end: () => send({ type: "owner:end" }),

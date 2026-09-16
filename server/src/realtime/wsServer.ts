@@ -8,6 +8,8 @@ import type { Participant, RoomRole } from "../rooms/types.js";
 import { ConnectionRateLimiter } from "../utils/rateLimit.js";
 import { logger } from "../utils/logger.js";
 
+type ControlMode = "host_approval" | "quick_swap";
+
 interface RoomFlags {
   roomId: string;
   ownerId: string;
@@ -15,6 +17,10 @@ interface RoomFlags {
   isEnded: boolean;
   /** The single participant currently allowed to send input:* messages, or null. Host-granted only. */
   controllerId: string | null;
+  /** host_approval: only owner:grantControl assigns a controller. quick_swap: anyone can self-claim
+   *  control:claim, no host approval needed. The Host picks this per-session and can change it, or
+   *  override it with lock/revoke/kick, at any time regardless of which mode is active. */
+  controlMode: ControlMode;
 }
 
 interface ConnectionState {
@@ -167,6 +173,7 @@ async function handleJoin(ws: WebSocket, joinCode: string, msg: any): Promise<Co
       isLocked: room.isLocked,
       isEnded: room.isEnded,
       controllerId: null,
+      controlMode: "host_approval",
     });
   }
   const flags = roomFlags.get(room.id)!;
@@ -202,7 +209,13 @@ async function handleJoin(ws: WebSocket, joinCode: string, msg: any): Promise<Co
   send(connState, {
     type: "joined",
     you: { id: participant.id, role: effectiveRoleFor(flags, participant) },
-    room: { id: room.id, name: room.name, isLocked: flags.isLocked, controllerId: flags.controllerId },
+    room: {
+      id: room.id,
+      name: room.name,
+      isLocked: flags.isLocked,
+      controllerId: flags.controllerId,
+      controlMode: flags.controlMode,
+    },
     elements,
     participants: participantsList(room.id),
   });
@@ -304,6 +317,41 @@ async function handleMessage(conn: ConnectionState, msg: any) {
     case "control:request": {
       const host = findParticipantConnection(conn.roomId, flags.ownerId);
       if (host) send(host, { type: "control:requested", userId: conn.participant.id });
+      return;
+    }
+
+    case "control:claim": {
+      if (conn.participant.id === flags.ownerId) {
+        send(conn, { type: "error", reason: "INVALID_CONTROL_GRANT" });
+        return;
+      }
+      if (flags.controlMode !== "quick_swap") {
+        send(conn, { type: "error", reason: "NOT_QUICK_SWAP" });
+        return;
+      }
+      if (flags.isLocked) {
+        send(conn, { type: "error", reason: "ROOM_LOCKED" });
+        return;
+      }
+      flags.controllerId = conn.participant.id;
+      broadcast(conn.roomId, { type: "control:granted", userId: conn.participant.id });
+      await recordAudit(conn.roomId, conn.participant.id, "CLAIM_CONTROL");
+      return;
+    }
+
+    case "owner:setControlMode": {
+      if (conn.participant.id !== flags.ownerId) {
+        send(conn, { type: "error", reason: "FORBIDDEN" });
+        return;
+      }
+      const mode = msg.mode === "quick_swap" ? "quick_swap" : msg.mode === "host_approval" ? "host_approval" : null;
+      if (!mode) {
+        send(conn, { type: "error", reason: "INVALID_CONTROL_MODE" });
+        return;
+      }
+      flags.controlMode = mode;
+      broadcast(conn.roomId, { type: "control:modeChanged", mode });
+      await recordAudit(conn.roomId, conn.participant.id, "SET_CONTROL_MODE", { mode });
       return;
     }
 

@@ -87,7 +87,10 @@ WebSocket connection described above.
 | `rtc:ice`         | `{ toId, candidate }`                       | anyone, to their peer         |
 | `owner:grantControl` | `{ userId }`                             | Host only                     |
 | `owner:revokeControl` | `{}`                                    | Host only                     |
+| `owner:setControlMode` | `{ mode: "host_approval" \| "quick_swap" }` | Host only                  |
 | `control:request` | `{}` — asks the Host for control            | any non-Host participant      |
+| `control:claim`   | `{}` — instantly takes control, no host approval | any non-Host participant, only when room's `controlMode` is `"quick_swap"` |
+| `cursor`          | `{ x, y }` (0–1 normalized) — presence-only pointer position, purely visual | anyone, always, no permission check |
 | `input:mouseMove` | `{ x, y }` (0–1 normalized fractions)        | current Controller only       |
 | `input:mouseButton` | `{ button, action: "down" \| "up", x, y }` | current Controller only       |
 | `input:scroll`    | `{ deltaX, deltaY }`                         | current Controller only       |
@@ -101,6 +104,8 @@ WebSocket connection described above.
 | `control:granted` | `{ userId }` — broadcast to the room                  |
 | `control:revoked` | `{}` — broadcast to the room                           |
 | `control:requested` | `{ userId }` — sent to the Host only                 |
+| `control:modeChanged` | `{ mode }` — broadcast to the room                  |
+| `cursor:moved`    | `{ userId, x, y }` — broadcast to everyone except the sender, for the presence-cursor overlay described in [08-remote-screen-control.md](08-remote-screen-control.md) §6 |
 | `input:event`     | the original `input:*` payload, relayed to the Host's connection only |
 | `error`           | `{ reason: "NOT_CONTROLLER" }` when a non-Controller sends an `input:*` message |
 

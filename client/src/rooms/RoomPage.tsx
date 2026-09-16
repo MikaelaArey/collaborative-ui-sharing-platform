@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.js";
 import { captureScreenSource, getDesktopBridge, type ScreenSource } from "../screenshare/desktopBridge.js";
@@ -7,12 +7,15 @@ import { ScreenShareView } from "../screenshare/ScreenShareView.js";
 import type { InputEvent } from "../screenshare/types.js";
 import { useScreenShareRoom } from "../screenshare/useScreenShareRoom.js";
 
+const CURSOR_THROTTLE_MS = 50;
+
 export function RoomPage() {
   const { joinCode = "" } = useParams();
   const { token, user } = useAuth();
   const [isSharing, setIsSharing] = useState(false);
   const [sourcePicker, setSourcePicker] = useState<ScreenSource[] | null>(null);
   const [permissionWarning, setPermissionWarning] = useState<string | null>(null);
+  const lastCursorSent = useRef(0);
 
   const bridge = getDesktopBridge();
 
@@ -67,6 +70,20 @@ export function RoomPage() {
     setIsSharing(false);
   }
 
+  function handleCursorMove(x: number, y: number) {
+    const now = Date.now();
+    if (now - lastCursorSent.current < CURSOR_THROTTLE_MS) return;
+    lastCursorSent.current = now;
+    actions.sendCursor(x, y);
+  }
+
+  function handleRequestOrClaim() {
+    if (state.controlMode === "quick_swap") actions.claimControl();
+    else actions.requestControl();
+  }
+
+  const displayStream = isHost ? state.localStream : state.remoteStream;
+
   return (
     <div className="room-page">
       <header className="room-header">
@@ -89,7 +106,7 @@ export function RoomPage() {
 
       <div className="room-body">
         <div className="room-canvas-wrapper">
-          {isHost && !isElectronHost && !state.remoteStream && (
+          {isHost && !isElectronHost && !displayStream && (
             <div className="host-web-notice">
               You created this room from the browser. To actually share and control your screen,
               open the <strong>Host desktop app</strong> and join this same room —
@@ -97,17 +114,22 @@ export function RoomPage() {
             </div>
           )}
           <ScreenShareView
-            remoteStream={state.remoteStream}
+            displayStream={displayStream}
             isController={isController}
+            isHost={isHost}
             isLocked={state.isLocked}
+            selfId={state.you?.id}
+            participants={state.participants}
+            cursors={state.cursors}
             onMouseMove={actions.sendMouseMove}
             onMouseButton={actions.sendMouseButton}
             onScroll={actions.sendScroll}
             onKey={actions.sendKey}
+            onCursorMove={handleCursorMove}
           />
-          {!isHost && !isController && state.remoteStream && (
-            <button className="request-control-btn" onClick={actions.requestControl}>
-              Request control
+          {!isHost && !isController && displayStream && (
+            <button className="request-control-btn" onClick={handleRequestOrClaim}>
+              {state.controlMode === "quick_swap" ? "Take control" : "Request control"}
             </button>
           )}
         </div>
@@ -116,6 +138,7 @@ export function RoomPage() {
           <HostControlPanel
             participants={state.participants}
             controllerId={state.controllerId}
+            controlMode={state.controlMode}
             pendingControlRequests={state.pendingControlRequests}
             isLocked={state.isLocked}
             isSharing={isSharing}
@@ -123,6 +146,7 @@ export function RoomPage() {
             onStopSharing={handleStopSharing}
             onGrantControl={actions.grantControl}
             onRevokeControl={actions.revokeControl}
+            onSetControlMode={actions.setControlMode}
             onLock={actions.lock}
             onKick={actions.kick}
             onEnd={actions.end}

@@ -11,11 +11,17 @@ than letting them edit a shared document. The design responds to that directly, 
 permissions table:
 
 - **Consent is always active, never passive or implied.** The Host must explicitly launch the
-  desktop app, explicitly choose what to share, and explicitly grant control to a specific named
-  participant — there is no default-on control, no "auto-approve," and no way for a participant to
-  request or take control without the Host granting it.
-- **Exactly one Controller at a time**, chosen by the Host (see
-  [08-remote-screen-control.md](08-remote-screen-control.md) §2). Revocable with one action.
+  desktop app and explicitly choose what to share — there is no default-on control and no way for
+  a participant to see the screen without the Host first sharing it. Within a live session, the
+  Host explicitly chooses, per session, whether every hand-off requires their individual approval
+  (`host_approval`, the default) or whether participants can self-claim control instantly
+  (`quick_swap`) — see [08-remote-screen-control.md](08-remote-screen-control.md) §6. Choosing
+  `quick_swap` is itself an active, revisable consent decision, not a passive default.
+- **Exactly one Controller at a time**, in either mode (see
+  [08-remote-screen-control.md](08-remote-screen-control.md) §2). Revocable with one action,
+  and the Host's `owner:lock` / `owner:revokeControl` / `owner:kick` / `owner:end` overrides work
+  identically regardless of which control mode is active — `quick_swap` only removes the
+  per-hand-off approval step, never the Host's ability to shut things down immediately.
 - **A persistent, unmissable on-screen indicator** on the Host's machine whenever the session is
   live and whenever someone has control (`desktop` app renders an always-on-top banner — this is
   not just a dashboard toggle the Host has to remember to check).
@@ -51,6 +57,11 @@ In scope, defended against:
   [05-security-and-permissions.md](05-security-and-permissions.md) §4).
 
 Explicitly out of scope for v1, stated rather than ignored:
+- In `quick_swap` mode, a participant claiming control without a per-instance Host approval click
+  is the Host's chosen tradeoff (they picked that mode), not a gap the platform tries to
+  second-guess — mitigated by the persistent indicator and one-action lock/revoke, and avoided
+  entirely by staying in `host_approval` mode for sessions where every hand-off should be a
+  deliberate Host action.
 - Protecting the Host from *themselves* granting control to someone malicious — the platform
   enforces who the Host said can control the screen; it cannot evaluate whether that grant was wise.
   This is inherent to any remote-support tool and is mitigated by the always-visible indicator plus

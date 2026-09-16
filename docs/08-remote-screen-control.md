@@ -98,7 +98,42 @@ raw Node/OS access.
   room view, in case a future direction wants collaborative annotation *on top of* a shared screen
   (drawing/markers over the live video) — that would reuse, not duplicate, this existing code.
 
-## 6. Known limitations (stated plainly, not glossed over)
+## 6. Presence cursors and control hand-off modes
+
+Added 2026-09-16, in response to a direct request for something closer to Google Docs' "everyone
+has a visible cursor" feel. The key fact that shapes this: a real computer has exactly one system
+mouse cursor and one keyboard input focus. Docs can show independent per-user cursors because every
+user is editing a shared *data model*, not fighting over one literal pointer — that doesn't
+transfer to remote-controlling one real OS desktop. So this is two separate, honestly-scoped
+features rather than one:
+
+**Presence cursors (visual only, no real effect).** Every connected participant — Viewer or
+Controller — continuously broadcasts their pointer position over the shared-screen video as a
+`cursor` message (already a generic, unauthenticated, broadcast-only message type — see
+[06-api-and-protocol-spec.md](06-api-and-protocol-spec.md) §2/§3). `ScreenShareView` renders every
+other participant's position as a colored, labeled dot overlaid on the video, exactly like the
+original canvas editor's `CursorLayer`. This lets people point things out and divide up work
+("I'll take this side of the screen") — it does not let more than one person's *actual* clicks land
+at once. Only the currently-granted Controller's `input:*` messages are relayed to the Host and
+actually move the real cursor (§3).
+
+**Control mode — the Host's choice per session.** A room has a `controlMode`, set by the Host at
+any time via `owner:setControlMode`, defaulting to `"host_approval"`:
+
+| Mode | How a participant gets control |
+|---|---|
+| `host_approval` (default) | Sends `control:request`; the Host sees it and must explicitly `owner:grantControl`. Nothing happens without the Host's action. |
+| `quick_swap` | Any non-Host participant can send `control:claim` and is *immediately* made the Controller (auto-replacing whoever had it) — no Host action needed per hand-off. |
+
+The Host can switch modes mid-session, and — critically — **retains every override regardless of
+mode**: `owner:lock`, `owner:revokeControl`, `owner:kick`, and `owner:end` all work identically in
+either mode and always win. `quick_swap` trades a layer of per-hand-off Host approval for speed; it
+does not trade away the Host's ability to shut things down instantly. This is why it's offered as a
+per-session choice rather than a global setting — a classroom demo might want `host_approval` for
+every hand-off to be deliberate, while a fast-paced pairing session might prefer `quick_swap` and
+rely on the Host's standing override for safety instead.
+
+## 7. Known limitations (stated plainly, not glossed over)
 
 1. **NAT traversal**: direct peer-to-peer WebRTC works on most home/office networks via STUN, but
    strict corporate firewalls may block it entirely without a TURN relay server, which this v1 does
