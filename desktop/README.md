@@ -66,3 +66,35 @@ Input coordinates are mapped against the **primary display**. Sharing your entir
 window or a secondary monitor still works for *viewing*, but a granted Controller's clicks may not
 land in the right place — see
 [docs/08-remote-screen-control.md](../docs/08-remote-screen-control.md) §6.
+
+## Troubleshooting
+
+**`Error: Electron failed to install correctly` (or `node_modules/electron/dist` is only a few
+hundred KB instead of ~200+MB).** Electron's own installer unzips its ~100MB binary using the
+`extract-zip`/`yauzl` npm packages, which have a silent-failure bug on very new Node.js versions
+(reproduced here on Node v26.5.1) — the promise just never resolves, leaving a near-empty `dist/`
+with no error. The download itself is fine (it's cached at
+`~/Library/Caches/electron/<hash>/electron-vX.X.X-darwin-<arch>.zip`); only the JS extraction step
+is broken. Fix by extracting it with the system's `unzip` instead:
+
+```bash
+cd "path/to/repo"
+rm -rf node_modules/electron/dist node_modules/electron/path.txt
+mkdir -p node_modules/electron/dist
+unzip -q ~/Library/Caches/electron/*/electron-v*-darwin-*.zip -d node_modules/electron/dist
+printf '%s' "Electron.app/Contents/MacOS/Electron" > node_modules/electron/path.txt   # no trailing newline
+```
+(On Linux/Windows, adjust the `path.txt` contents to `electron` / `electron.exe` respectively —
+see `node_modules/electron/install.js`'s `getPlatformPath()`.) Verify with
+`node -e "console.log(require('electron'))"` — it should print the binary path, not throw.
+
+**Electron launches but immediately errors with something like
+`Cannot read properties of undefined (reading 'whenReady')`, or `electron --version` prints a
+plain Node version instead of the Electron version.** The `ELECTRON_RUN_AS_NODE` environment
+variable is set, which forces the Electron binary to behave as a plain Node.js interpreter instead
+of launching as a GUI app — so `require('electron')` returns a path string instead of the real API,
+and `app` is `undefined`. This is a well-known side effect of **VS Code's integrated terminal**,
+which is itself an Electron app and leaks this variable into terminals it opens. `npm start` in
+this project already works around it (`env -u ELECTRON_RUN_AS_NODE electron .`), but if you're
+invoking `electron` directly for debugging, either prefix the command the same way or just run it
+from a plain Terminal.app window instead of VS Code's built-in terminal.
