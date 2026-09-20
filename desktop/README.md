@@ -22,6 +22,12 @@ plain Node.js ABI, not Electron's — `rebuild-native` (wrapping `@electron/rebu
 against the exact Electron version in this project so the native module actually loads inside the
 Electron process. Re-run it whenever you bump the `electron` version in `package.json`.
 
+On macOS, `npm start` also runs `npm run sign-macos-app` automatically every time (see
+Troubleshooting below for why this is necessary — in short, the raw `node_modules/electron` binary
+has a generic shared identity that recent macOS won't reliably prompt for Screen Recording /
+Accessibility permission under). You shouldn't need to think about this; it's mentioned here so
+it's not a mystery if you ever run `electron .` directly instead of `npm start`.
+
 ## Running it
 
 You need the server and client dev servers running too (see the root [README](../README.md)):
@@ -98,3 +104,28 @@ which is itself an Electron app and leaks this variable into terminals it opens.
 this project already works around it (`env -u ELECTRON_RUN_AS_NODE electron .`), but if you're
 invoking `electron` directly for debugging, either prefix the command the same way or just run it
 from a plain Terminal.app window instead of VS Code's built-in terminal.
+
+**Screen Recording / Accessibility permission prompts never appear, "Electron" is never listed in
+System Settings → Privacy & Security at all, and a shared screen just shows up solid black on the
+Viewer's end (with input control silently not working).** Two things had to both be true to cause
+this in practice, worth ruling out in this order:
+
+1. The code was gating the actual capture attempt behind a permission *status check* — but macOS
+   only ever shows the Screen Recording consent dialog in response to an actual capture attempt,
+   so it was a catch-22 that could never resolve. (Already fixed — `handleStartSharing` no longer
+   blocks on a pre-check.) Similarly, checking Accessibility status with the no-prompt flag
+   everywhere meant nothing ever *requested* it either — fixed by an explicit
+   `request-accessibility-access` call fired at the moment control is granted.
+2. Separately, and only relevant on recent macOS: the raw `node_modules/electron` binary ships
+   with the bundle identifier `com.github.Electron` — the exact same identity every other
+   unpackaged Electron dev project on the machine shares. TCC (the permission system) can be
+   unreliable about presenting or honoring prompts for that generic, unsigned, shared identity.
+   The fix is giving this project's copy of the Electron binary its own distinct identifier and
+   an ad-hoc code signature — `scripts/sign-macos-app.sh` does this (and clears the extended
+   attributes a manual `unzip` extraction can leave behind, which otherwise makes `codesign`
+   refuse to sign at all). This now runs automatically as part of `npm start`; run
+   `npm run sign-macos-app` directly if you ever need to redo it in isolation (e.g. right after
+   troubleshooting the extraction issue above, before the next `npm start`).
+
+If it's still not prompting after both of those, check System Settings again — the app should now
+show up as **"Screen Share Host"** rather than generic "Electron".

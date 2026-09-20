@@ -6,8 +6,9 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "npm run build && env -u ELECTRON_RUN_AS_NODE electron .",
-    "rebuild-native": "electron-rebuild -f -w @nut-tree-fork/nut-js"
+    "start": "npm run build && npm run sign-macos-app && env -u ELECTRON_RUN_AS_NODE electron .",
+    "rebuild-native": "electron-rebuild -f -w @nut-tree-fork/nut-js",
+    "sign-macos-app": "bash scripts/sign-macos-app.sh"
   },
   "dependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6"
