@@ -8,3 +8,4 @@ server/prisma/dev.db
 server/prisma/dev.db-journal
 .vite/
 *.tsbuildinfo
+server/public/

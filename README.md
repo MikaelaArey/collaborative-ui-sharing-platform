@@ -64,6 +64,13 @@ Full walkthrough (permissions, granting control, etc.) in [`desktop/README.md`](
 5. From the Host panel, try **Revoke control**, **Lock room**, **Kick**, and **End session** and
    observe the immediate effect in the browser window.
 
+## Deploying so join links work over the internet
+
+Everything above runs on `localhost`, which only works for people on this same machine. To get a
+real `https://...` join link anyone can open, see [`docs/10-deployment.md`](docs/10-deployment.md)
+(deploys the server + client together to Fly.io — the Electron Host app then points at that URL
+instead of `localhost:5173`).
+
 ## Status
 
 Screen sharing + remote control (v1.1) as scoped in
