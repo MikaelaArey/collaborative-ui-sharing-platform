@@ -15,6 +15,9 @@ export interface DesktopBridge {
   listScreenSources: () => Promise<ScreenSource[]>;
   injectInput: (event: InputEvent) => void;
   getPermissionStatus: () => Promise<{ screenRecording: boolean; accessibility: boolean }>;
+  /** Actively triggers macOS's Accessibility consent dialog if not yet decided (unlike
+   * getPermissionStatus, which only checks). Call this at the moment control is first needed. */
+  requestAccessibilityAccess: () => Promise<boolean>;
   openPermissionSettings: (kind: "screenRecording" | "accessibility") => void;
 }
 

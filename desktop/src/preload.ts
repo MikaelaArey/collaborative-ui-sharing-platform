@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   listScreenSources: () => ipcRenderer.invoke("list-screen-sources"),
   injectInput: (event: unknown) => ipcRenderer.send("inject-input", event),
   getPermissionStatus: () => ipcRenderer.invoke("get-permission-status"),
+  requestAccessibilityAccess: () => ipcRenderer.invoke("request-accessibility-access"),
   openPermissionSettings: (kind: "screenRecording" | "accessibility") =>
     ipcRenderer.send("open-permission-settings", kind),
 });

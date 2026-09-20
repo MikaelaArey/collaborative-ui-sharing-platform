@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.js";
 import { captureScreenSource, getDesktopBridge, type ScreenSource } from "../screenshare/desktopBridge.js";
@@ -30,13 +30,6 @@ export function RoomPage() {
   const isController = state.you?.id === state.controllerId;
   const isElectronHost = isHost && !!bridge;
 
-  useEffect(() => {
-    if (!isElectronHost || !bridge) return;
-    bridge.getPermissionStatus().then((p) => {
-      if (!p.accessibility) setPermissionWarning((prev) => prev ?? "accessibility");
-    });
-  }, [isElectronHost, bridge]);
-
   if (state.status === "connecting") return <div className="room-status">Connecting...</div>;
   if (state.status === "kicked") return <div className="room-status">You were removed from this room by the host.</div>;
   if (state.status === "ended") return <div className="room-status">This session has ended.</div>;
@@ -44,18 +37,35 @@ export function RoomPage() {
 
   async function handleStartSharing() {
     if (!bridge) return;
-    const permissions = await bridge.getPermissionStatus();
-    if (!permissions.screenRecording) {
-      setPermissionWarning("screenRecording");
-      return;
-    }
     setPermissionWarning(null);
+    // Don't gate on a pre-check: macOS only ever shows the Screen Recording consent dialog in
+    // response to an actual capture attempt, so the attempt itself is what has to happen first.
+    // If it's not yet granted, this yields a black stream — see the always-visible permission
+    // check link in the Host panel for how to recover from that without guessing.
     const sources = await bridge.listScreenSources();
     if (sources.length === 1) {
       await beginCapture(sources[0].id);
     } else {
       setSourcePicker(sources);
     }
+  }
+
+  async function handleGrantControl(userId: string) {
+    // Accessibility's prompt has an explicit "request" mode (unlike Screen Recording) — fire it
+    // right at the moment control is actually needed, so the system dialog has clear context.
+    if (bridge) {
+      const granted = await bridge.requestAccessibilityAccess();
+      if (!granted) setPermissionWarning("accessibility");
+    }
+    actions.grantControl(userId);
+  }
+
+  async function handleCheckPermissions() {
+    if (!bridge) return;
+    const status = await bridge.getPermissionStatus();
+    if (!status.screenRecording) setPermissionWarning("screenRecording");
+    else if (!status.accessibility) setPermissionWarning("accessibility");
+    else setPermissionWarning(null);
   }
 
   async function beginCapture(sourceId: string) {
@@ -95,11 +105,24 @@ export function RoomPage() {
 
       {isElectronHost && permissionWarning && (
         <div className="host-web-notice permission-warning">
-          {permissionWarning === "screenRecording"
-            ? "Screen Recording permission is required before you can share your screen."
-            : "Accessibility permission is required before remote control can move your mouse or keyboard."}
+          {permissionWarning === "screenRecording" ? (
+            <>
+              Screen isn't showing up? macOS hasn't granted Screen Recording permission yet — check
+              System Settings, and note macOS requires <strong>restarting this app</strong> after
+              granting it (not just re-clicking Start).
+            </>
+          ) : (
+            "Accessibility permission is required before remote control can move your mouse or keyboard."
+          )}
           <button onClick={() => bridge?.openPermissionSettings(permissionWarning as "screenRecording" | "accessibility")}>
             Open System Settings
+          </button>
+        </div>
+      )}
+      {isElectronHost && !permissionWarning && (
+        <div className="permission-check-link">
+          <button className="link-button" onClick={handleCheckPermissions}>
+            Not seeing your screen or control not working? Check permissions
           </button>
         </div>
       )}
@@ -144,7 +167,7 @@ export function RoomPage() {
             isSharing={isSharing}
             onStartSharing={handleStartSharing}
             onStopSharing={handleStopSharing}
-            onGrantControl={actions.grantControl}
+            onGrantControl={handleGrantControl}
             onRevokeControl={actions.revokeControl}
             onSetControlMode={actions.setControlMode}
             onLock={actions.lock}
