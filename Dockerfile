@@ -4,6 +4,8 @@
 # run the signaling/API server.
 
 FROM node:20-slim AS build
+# Prisma's query engine needs OpenSSL, which node:20-slim doesn't include by default.
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # Only the workspace manifests needed to resolve the "server" and "client" workspaces — the
@@ -25,11 +27,13 @@ RUN npm run build --workspace=server
 
 # ---- Runtime image ----
 FROM node:20-slim AS runtime
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/server
 ENV NODE_ENV=production
 
+# npm workspaces hoists all dependencies to the root node_modules (there is no server/node_modules
+# to copy) — Node's module resolution walks up from /app/server to /app and finds them there.
 COPY --from=build /app/node_modules /app/node_modules
-COPY --from=build /app/server/node_modules /app/server/node_modules
 COPY --from=build /app/server/dist ./dist
 COPY --from=build /app/server/prisma ./prisma
 COPY --from=build /app/client/dist ./public

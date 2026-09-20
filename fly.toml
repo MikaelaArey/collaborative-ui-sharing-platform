@@ -1,26 +1,26 @@
 # Fly.io app config — see docs/10-deployment.md for the full deploy walkthrough.
-# `app` must be changed to a globally-unique name if this one is already taken.
-app = "collab-screen-share"
-primary_region = "iad"
+# Deployed and verified live at https://collab-screen-share.fly.dev on 2026-09-20.
+
+app = 'collab-screen-share'
+primary_region = 'iad'
 
 [build]
-
 [env]
-  PORT = "4000"
-  DATABASE_URL = "file:/data/prod.db"
+  DATABASE_URL = 'file:/data/prod.db'
+  PORT = '4000'
 
 [[mounts]]
-  source = "collab_data"
-  destination = "/data"
+  source = 'collab_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 4000
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 1
-  processes = ["app"]
+  processes = ['app']
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = 'shared-cpu-1x'
+  memory = '512mb'

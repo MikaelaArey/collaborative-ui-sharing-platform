@@ -4,6 +4,8 @@ client/dist
 server/dist
 server/prisma/dev.db
 server/prisma/dev.db-journal
-desktop
+desktop/src
+desktop/dist
+desktop/node_modules
 .git
 *.log
