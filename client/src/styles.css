@@ -176,6 +176,12 @@ button:disabled {
   align-items: center;
 }
 
+.copy-link-btn {
+  background: #3cb44b;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
 .room-body {
   flex: 1;
   display: flex;

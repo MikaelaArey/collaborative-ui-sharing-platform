@@ -15,6 +15,7 @@ export function RoomPage() {
   const [isSharing, setIsSharing] = useState(false);
   const [sourcePicker, setSourcePicker] = useState<ScreenSource[] | null>(null);
   const [permissionWarning, setPermissionWarning] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const lastCursorSent = useRef(0);
 
   const bridge = getDesktopBridge();
@@ -92,6 +93,18 @@ export function RoomPage() {
     else actions.requestControl();
   }
 
+  async function handleCopyInviteLink() {
+    const link = `${window.location.origin}/room/${joinCode}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // Clipboard API can be blocked in some contexts — fall back to a manual copy.
+      window.prompt("Copy this invite link:", link);
+    }
+  }
+
   const displayStream = isHost ? state.localStream : state.remoteStream;
 
   return (
@@ -99,6 +112,9 @@ export function RoomPage() {
       <header className="room-header">
         <h1>{state.roomName}</h1>
         <span className="join-code">Join code: {joinCode}</span>
+        <button className="copy-link-btn" onClick={handleCopyInviteLink}>
+          {linkCopied ? "Copied!" : "Copy invite link"}
+        </button>
         <span className="your-role">You are: {isHost ? "HOST" : isController ? "CONTROLLER" : "VIEWER"}</span>
         {state.isLocked && <span className="badge">Room locked</span>}
       </header>
